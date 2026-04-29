@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Slack Nuke</string>
+    <string name="big_button_text">BLOCK SLACK\nUNTIL 6 AM</string>
+    <string name="status_blocked">Slack is blocked until %1$s.\n\nThere is no off-switch. Wait, or uninstall this app.</string>
+    <string name="help_ready">Tap the button to block Slack until the next 6 am.</string>
+    <string name="help_needs_permission">Tap the button — you\'ll be asked to grant Accessibility permission first.</string>
+    <string name="help_locked">No way to undo this from inside the app. Uninstall to unblock early.</string>
+
+    <string name="enable_title">Grant Accessibility permission</string>
+    <string name="enable_message">Slack Nuke needs Accessibility permission to detect when Slack opens and close it. \n\nIn the next screen, find \"Slack Nuke\" and toggle it on. \n\nIf the toggle is greyed out (Android 13+), go back to App info, tap the ⋮ menu in the top-right and choose \"Allow restricted settings\" first.</string>
+    <string name="enable_open">Open settings</string>
+
+    <string name="accessibility_description">Detects when Slack is opened during a block window and sends you back to the home screen. Does not collect, store, or transmit any data.</string>
+</resources>
