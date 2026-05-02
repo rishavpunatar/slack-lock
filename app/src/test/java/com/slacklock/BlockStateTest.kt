@@ -32,4 +32,15 @@ class BlockStateTest {
 
         assertEquals(expected.toInstant().toEpochMilli(), BlockState.nextBlockUntilMillis(now))
     }
+
+    @Test
+    fun durationBlockAddsMinutesToCurrentTime() {
+        val now = ZonedDateTime.of(2026, 4, 29, 22, 45, 0, 0, zone)
+        val expected = ZonedDateTime.of(2026, 4, 30, 0, 15, 0, 0, zone)
+
+        assertEquals(
+            expected.toInstant().toEpochMilli(),
+            BlockState.blockUntilMillisForDurationMinutes(90, now)
+        )
+    }
 }

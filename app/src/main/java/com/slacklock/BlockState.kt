@@ -44,15 +44,24 @@ object BlockState {
         return target.toInstant().toEpochMilli()
     }
 
+    fun blockUntilMillisForDurationMinutes(
+        durationMinutes: Long,
+        now: ZonedDateTime = ZonedDateTime.now()
+    ): Long = now.plusMinutes(durationMinutes).toInstant().toEpochMilli()
+
+    fun startBlockUntil(ctx: Context, untilMillis: Long) {
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .putLong(KEY_BLOCK_UNTIL, untilMillis)
+            .apply()
+    }
+
     /**
      * Sets the block to expire at the next occurrence of 06:00 in the device's local time zone.
      * Pressed at 23:00 → blocks until 06:00 tomorrow (7 hours).
      * Pressed at 03:00 → blocks until 06:00 today (3 hours).
      */
     fun startBlockUntilNext6am(ctx: Context) {
-        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .edit()
-            .putLong(KEY_BLOCK_UNTIL, nextBlockUntilMillis())
-            .apply()
+        startBlockUntil(ctx, nextBlockUntilMillis())
     }
 }

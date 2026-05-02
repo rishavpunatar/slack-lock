@@ -1,8 +1,8 @@
 # Slack Lock
 
-An Android self-binding app that prevents opening the Slack app until the next 6 AM.
+An Android self-binding app that prevents opening the Slack app for a chosen timer duration.
 
-The app is intentionally narrow: one button, one confirmation, one Accessibility service scoped to Slack's Android package (`com.Slack`). During an active lock, opening Slack sends you back to the home screen.
+The app is intentionally narrow: one button, one duration picker, one confirmation, and one Accessibility service scoped to Slack's Android package (`com.Slack`). During an active lock, opening Slack sends you back to the home screen.
 
 This does not force-stop Slack, mute notifications, block Slack in a browser, or block Slack in another Android profile. Pair it with Android Focus/DND or Slack notification settings if notifications are the real trigger.
 
@@ -46,7 +46,7 @@ Android restricts sideloaded apps from enabling sensitive settings until you exp
 
 ### 4. Use it
 
-Open **Slack Lock**, tap the button, and confirm the lock. Slack is then blocked until the next 6 AM in your phone's local time zone.
+Open **Slack Lock**, tap the button, choose a timer, and confirm the lock. Presets include 30 minutes, 1 hour, 2 hours, 4 hours, and the original "until next 6 AM" mode. You can also choose a custom hours/minutes timer.
 
 There is no in-app undo while a lock is active. To stop early, leave the app and either disable **Slack Lock** in Android Accessibility Settings or uninstall the app.
 
@@ -73,9 +73,9 @@ This app is not presented as an accessibility tool for people with disabilities.
 
 ## How it works
 
-- `MainActivity` handles the single-screen UI, the Accessibility disclosure, the final lock confirmation, and the visible enforcement status.
+- `MainActivity` handles the single-screen UI, the Accessibility disclosure, the duration picker, the final lock confirmation, and the visible enforcement status.
 - `BlockerService` is an Android `AccessibilityService` that listens for Slack foreground events and sends the device home during an active lock.
-- `BlockState` stores `blockUntilMillis` and computes the next local 6 AM.
+- `BlockState` stores `blockUntilMillis`, computes duration-based timers, and keeps the next local 6 AM shortcut.
 
 If Accessibility is disabled while a lock is active, the app shows that the timer is still active but enforcement is off.
 
@@ -99,6 +99,6 @@ The public repo builds a non-debuggable release variant signed with Android's de
 
 ## Customizing
 
-The 6 AM rule lives in [`BlockState.kt`](app/src/main/java/com/slacklock/BlockState.kt). Change the `WAKE_TIME` value, rebuild, and reinstall.
+The 6 AM shortcut lives in [`BlockState.kt`](app/src/main/java/com/slacklock/BlockState.kt). Change the `WAKE_TIME` value, rebuild, and reinstall.
 
 To block additional apps, add their package names to [`accessibility_config.xml`](app/src/main/res/xml/accessibility_config.xml) and update the package check in [`BlockerService.kt`](app/src/main/java/com/slacklock/BlockerService.kt).

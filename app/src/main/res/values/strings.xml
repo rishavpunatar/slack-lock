@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Slack Lock</string>
-    <string name="big_button_text">LOCK SLACK\nUNTIL 6 AM</string>
+    <string name="big_button_text">LOCK SLACK\nWITH TIMER</string>
     <string name="enable_enforcement_text">ENABLE\nENFORCEMENT</string>
     <string name="status_blocked_enforcing">Slack is locked until %1$s.\n\nEnforcement is on. Opening Slack returns you to the home screen.</string>
     <string name="status_blocked_not_enforcing">Slack Lock runs until %1$s, but enforcement is off.\n\nRe-enable Accessibility to block Slack.</string>
-    <string name="help_ready">Tap when you are ready to lock Slack until the next 6 AM.</string>
+    <string name="help_ready">Tap when you are ready to choose a Slack lock timer.</string>
     <string name="help_needs_permission">Setup needed: the next tap explains Accessibility access, then opens Android Settings.</string>
     <string name="help_locked">No in-app undo. To stop early, disable Slack Lock in Accessibility Settings or uninstall it.</string>
     <string name="help_locked_not_enforcing">The timer is still active, but Slack is currently reachable because Accessibility is off.</string>
@@ -18,7 +18,20 @@
     <string name="disclosure_message">Slack Lock uses Android Accessibility only to detect when the Slack app opens during an active lock. It receives Slack window-change events and sends you to the home screen. It does not read screen content, messages, typed text, notifications, files, or contacts, and it does not collect or share data.</string>
     <string name="disclosure_accept">I understand</string>
 
-    <string name="confirm_title">Lock Slack until 6 AM?</string>
+    <string name="duration_title">Choose lock duration</string>
+    <string name="duration_30_minutes">30 minutes</string>
+    <string name="duration_1_hour">1 hour</string>
+    <string name="duration_2_hours">2 hours</string>
+    <string name="duration_4_hours">4 hours</string>
+    <string name="duration_until_6_am">Until next 6 AM</string>
+    <string name="duration_custom">Custom timer</string>
+    <string name="custom_duration_title">Custom timer</string>
+    <string name="duration_hours_picker">%1$d hr</string>
+    <string name="duration_minutes_picker">%1$d min</string>
+    <string name="duration_continue">Continue</string>
+    <string name="duration_invalid">Choose at least 15 minutes.</string>
+
+    <string name="confirm_title">Lock Slack?</string>
     <string name="confirm_message">Opening Slack before %1$s will return you to the home screen. There is no in-app undo. To stop early, disable Slack Lock in Accessibility Settings or uninstall it.</string>
     <string name="confirm_lock">Lock Slack</string>
 
