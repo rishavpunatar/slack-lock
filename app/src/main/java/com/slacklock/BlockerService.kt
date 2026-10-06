@@ -22,6 +22,10 @@ import android.view.inputmethod.InputMethodManager
  * wait briefly (the inbox may still be loading) then press Back, which lands on
  * that account's inbox where the button is visible.
  *
+ * Android only reports a window after it's on screen, so while the account is
+ * unknown, and while the Home animation plays, a [Curtain] covers the screen to
+ * stop locked content flashing up.
+ *
  * Outside a Gmail lock the service narrows itself back to Slack window events
  * only, exactly as before Gmail support existed.
  */
@@ -33,6 +37,12 @@ class BlockerService : AccessibilityService() {
     private var unknownSince = 0L
     private val handler = Handler(Looper.getMainLooper())
     private val recheckGmail = Runnable { enforceGmail() }
+    private var contentCheckPending = false
+    private val contentCheck = Runnable {
+        contentCheckPending = false
+        enforceGmail()
+    }
+    private lateinit var curtain: Curtain
     private var widened: Boolean? = null
     private var transientPackages: Set<String> = emptySet()
 
@@ -42,6 +52,7 @@ class BlockerService : AccessibilityService() {
 
     override fun onServiceConnected() {
         super.onServiceConnected()
+        curtain = Curtain(this)
         // Windows that float over Gmail without the user leaving it.
         val imm = getSystemService(InputMethodManager::class.java)
         transientPackages = buildSet {
@@ -56,6 +67,8 @@ class BlockerService : AccessibilityService() {
     override fun onDestroy() {
         BlockState.prefs(this).unregisterOnSharedPreferenceChangeListener(prefsListener)
         handler.removeCallbacks(recheckGmail)
+        handler.removeCallbacks(contentCheck)
+        if (::curtain.isInitialized) curtain.hide()
         super.onDestroy()
     }
 
@@ -67,13 +80,22 @@ class BlockerService : AccessibilityService() {
                 if (event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
                 if (BlockState.isBlocked(this, LockTarget.SLACK)) goHome()
             }
-            LockTarget.WORK_GMAIL.packageName -> enforceGmail()
+            LockTarget.WORK_GMAIL.packageName -> {
+                if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+                    enforceGmail()
+                } else if (!contentCheckPending) {
+                    // Content changes come in bursts (scrolling, loading): check at most every 100 ms.
+                    contentCheckPending = true
+                    handler.postDelayed(contentCheck, CONTENT_CHECK_MS)
+                }
+            }
             else -> {
                 // The user moved to another app; recheck the account next time Gmail opens.
                 if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED &&
                     pkg !in transientPackages
                 ) {
                     forgetGmailAccount()
+                    curtain.hideAfter(HOME_SETTLE_MS)
                 }
             }
         }
@@ -82,10 +104,13 @@ class BlockerService : AccessibilityService() {
     private fun enforceGmail() {
         if (!BlockState.isBlocked(this, LockTarget.WORK_GMAIL)) return
         val workAccount = BlockState.workGmailAccount(this) ?: return
-        val root = rootInActiveWindow ?: return
-        if (root.packageName?.toString() != LockTarget.WORK_GMAIL.packageName) return
+        // Cover first: the scan below takes a few frames. If it finds a personal
+        // account the cover comes down before it is ever drawn.
+        if (gmailAccount == GmailAccount.UNKNOWN) curtain.show()
+        val root = rootInActiveWindow
+            ?.takeIf { it.packageName?.toString() == LockTarget.WORK_GMAIL.packageName }
 
-        val signedIn = findSignedInAccount(root)
+        val signedIn = root?.let { findSignedInAccount(it) }
         if (signedIn != null) {
             val isWork = WorkAccount.matches(workAccount, signedIn)
             val detected = if (isWork) GmailAccount.WORK else GmailAccount.OTHER
@@ -98,23 +123,26 @@ class BlockerService : AccessibilityService() {
         when (gmailAccount) {
             GmailAccount.WORK -> goHome()
             GmailAccount.UNKNOWN -> {
-                // No account button yet. Give the screen a moment to load, then step
-                // back towards the inbox to find out which account this is.
+                // No account button yet. Keep Gmail covered, give the screen a moment
+                // to load, then step back towards the inbox to find out which account this is.
+                curtain.show()
                 val now = SystemClock.elapsedRealtime()
                 if (unknownSince == 0L) {
                     unknownSince = now
                     handler.postDelayed(recheckGmail, ACCOUNT_GRACE_MS)
-                } else if (now - unknownSince >= ACCOUNT_GRACE_MS) {
+                } else if (now - unknownSince >= ACCOUNT_GRACE_MS && root != null) {
                     unknownSince = 0L
                     performGlobalAction(GLOBAL_ACTION_BACK)
                 }
             }
-            GmailAccount.OTHER -> Unit
+            GmailAccount.OTHER -> curtain.hide()
         }
     }
 
     private fun goHome() {
         forgetGmailAccount()
+        curtain.show()
+        curtain.hideAfter(HOME_SETTLE_MS)
         performGlobalAction(GLOBAL_ACTION_HOME)
     }
 
@@ -122,6 +150,8 @@ class BlockerService : AccessibilityService() {
         gmailAccount = GmailAccount.UNKNOWN
         unknownSince = 0L
         handler.removeCallbacks(recheckGmail)
+        handler.removeCallbacks(contentCheck)
+        contentCheckPending = false
     }
 
     /** Depth-first search for Gmail's account button; stops at the first match. */
@@ -167,6 +197,8 @@ class BlockerService : AccessibilityService() {
 
     private companion object {
         const val ACCOUNT_GRACE_MS = 1500L
+        const val CONTENT_CHECK_MS = 100L
+        const val HOME_SETTLE_MS = 600L
         const val MAX_NODES = 3000
     }
 }
