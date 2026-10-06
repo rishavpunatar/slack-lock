@@ -70,6 +70,7 @@ The service configuration is deliberately limited:
 - During a Gmail lock it also receives window-change events from other apps (to notice you left Gmail and recheck the account next time) and Gmail content-change events (to catch account switches).
 - It reads window content from Gmail only, only during a Gmail lock, and only looks at Gmail's account button (the avatar in the top-right). It never reads email content, and never reads other apps' screens.
 - Cannot perform gestures.
+- While a locked app is being sent home, or while Gmail's account is still being checked, it draws a plain full-screen cover (an accessibility overlay) so locked content doesn't flash up. The cover never takes touches and removes itself within 4 seconds at most.
 - Does not request network access.
 - Stores nothing except your lock timers, the work account setting, and whether the last Gmail check saw the work account.
 
@@ -77,6 +78,7 @@ This app is not presented as an accessibility tool for people with disabilities.
 
 ### Work Gmail: how it decides, and its limits
 
+- **Opening Gmail during a lock** briefly shows a cover until the account is confirmed. For a personal account that usually happens before the cover is even drawn; for the work account the cover stays up through the Home animation. Android only reports a window once it is on screen, so a frame or two can still slip through.
 - **Inbox and most list screens** show the account button, so the account is known immediately.
 - **Screens without the account button** (an open email, compose): once Slack Lock has seen the account since Gmail was opened, it remembers it. If it hasn't (e.g. you tapped a Gmail notification and Gmail opened straight into an email), it waits 1.5 seconds and then presses Back, which takes you to that account's inbox, where it can check. During a Gmail lock that means personal emails opened from a notification bounce to the personal inbox once. That is deliberate: otherwise tapping a work notification would skip the lock.
 - **"All inboxes"** mixes accounts under whichever account button is selected. Avoid it during a lock; it is not blocked when a personal account is selected.
