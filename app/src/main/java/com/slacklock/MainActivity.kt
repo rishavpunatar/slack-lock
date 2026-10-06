@@ -8,11 +8,13 @@ import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.provider.Settings
+import android.text.InputType
 import android.text.TextUtils
 import android.view.Gravity
 import android.view.View
 import android.view.accessibility.AccessibilityManager
 import android.widget.Button
+import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.NumberPicker
 import android.widget.TextView
@@ -37,6 +39,7 @@ class MainActivity : Activity() {
     private lateinit var bigButton: Button
     private lateinit var statusText: TextView
     private lateinit var helpText: TextView
+    private lateinit var accountButton: Button
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -44,8 +47,10 @@ class MainActivity : Activity() {
         bigButton = findViewById(R.id.big_button)
         statusText = findViewById(R.id.status_text)
         helpText = findViewById(R.id.help_text)
+        accountButton = findViewById(R.id.account_button)
 
         bigButton.setOnClickListener { handleButtonPress() }
+        accountButton.setOnClickListener { showWorkAccountDialog(onSaved = ::refreshUi) }
     }
 
     override fun onResume() {
@@ -55,28 +60,62 @@ class MainActivity : Activity() {
 
     private fun refreshUi() {
         val accessibilityEnabled = isAccessibilityEnabled()
-        if (BlockState.isBlocked(this)) {
-            val untilText = formatUntil(BlockState.blockUntilMillis(this))
-            statusText.text = if (accessibilityEnabled)
-                getString(R.string.status_blocked_enforcing, untilText)
-            else
-                getString(R.string.status_blocked_not_enforcing, untilText)
-            statusText.visibility = View.VISIBLE
-            bigButton.visibility = if (accessibilityEnabled) View.GONE else View.VISIBLE
-            bigButton.text = getString(R.string.enable_enforcement_text)
-            helpText.text = if (accessibilityEnabled)
-                getString(R.string.help_locked)
-            else
-                getString(R.string.help_locked_not_enforcing)
-        } else {
+        val locked = BlockState.lockedTargets(this)
+        val unlocked = LockTarget.entries - locked.toSet()
+
+        if (locked.isEmpty()) {
             statusText.visibility = View.GONE
-            bigButton.visibility = View.VISIBLE
-            bigButton.text = getString(R.string.big_button_text)
-            helpText.text = if (accessibilityEnabled)
-                getString(R.string.help_ready)
-            else
-                getString(R.string.help_needs_permission)
+        } else {
+            val lines = locked.map {
+                getString(
+                    R.string.status_target_locked,
+                    targetName(it),
+                    formatUntil(BlockState.blockUntilMillis(this, it))
+                )
+            }.toMutableList()
+            lines += getString(
+                if (accessibilityEnabled) R.string.status_enforcing else R.string.status_not_enforcing
+            )
+            if (LockTarget.WORK_GMAIL in locked) {
+                BlockState.lastGmailCheck(this)?.let { (sawWork, at) ->
+                    lines += getString(
+                        if (sawWork) R.string.status_gmail_check_work else R.string.status_gmail_check_other,
+                        DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(at))
+                    )
+                }
+            }
+            statusText.text = lines.joinToString("\n")
+            statusText.visibility = View.VISIBLE
         }
+
+        when {
+            locked.isNotEmpty() && !accessibilityEnabled -> {
+                bigButton.visibility = View.VISIBLE
+                bigButton.text = getString(R.string.enable_enforcement_text)
+                helpText.text = getString(R.string.help_locked_not_enforcing)
+            }
+            unlocked.isEmpty() -> {
+                bigButton.visibility = View.GONE
+                helpText.text = getString(R.string.help_locked)
+            }
+            else -> {
+                bigButton.visibility = View.VISIBLE
+                bigButton.text = getString(R.string.big_button_text)
+                helpText.text = when {
+                    locked.isNotEmpty() -> getString(R.string.help_partly_locked)
+                    accessibilityEnabled -> getString(R.string.help_ready)
+                    else -> getString(R.string.help_needs_permission)
+                }
+            }
+        }
+
+        val account = BlockState.workGmailAccount(this)
+        accountButton.text = when {
+            account == null -> getString(R.string.work_account_unset)
+            LockTarget.WORK_GMAIL in locked -> getString(R.string.work_account_locked, account)
+            else -> getString(R.string.work_account_set, account)
+        }
+        accountButton.isEnabled = LockTarget.WORK_GMAIL !in locked
     }
 
     private fun handleButtonPress() {
@@ -90,8 +129,8 @@ class MainActivity : Activity() {
             return
         }
 
-        if (!BlockState.isBlocked(this)) {
-            showDurationPickerDialog()
+        if (BlockState.lockedTargets(this).size < LockTarget.entries.size) {
+            showTargetPickerDialog()
         }
     }
 
@@ -136,7 +175,7 @@ class MainActivity : Activity() {
             .setPositiveButton(R.string.disclosure_accept) { _, _ ->
                 BlockState.acceptAccessibilityDisclosure(this)
                 if (isAccessibilityEnabled()) {
-                    showDurationPickerDialog()
+                    showTargetPickerDialog()
                 } else {
                     showEnableAccessibilityDialog()
                 }
@@ -145,7 +184,74 @@ class MainActivity : Activity() {
             .show()
     }
 
-    private fun showDurationPickerDialog() {
+    private fun showTargetPickerDialog() {
+        val targets = LockTarget.entries - BlockState.lockedTargets(this).toSet()
+        val account = BlockState.workGmailAccount(this)
+        val labels = targets.map {
+            when {
+                it != LockTarget.WORK_GMAIL -> targetName(it)
+                account != null -> getString(R.string.target_work_gmail_with_account, account)
+                else -> getString(R.string.target_work_gmail_needs_setup)
+            }
+        }.toTypedArray()
+        val checked = BooleanArray(targets.size) { targets[it] == LockTarget.SLACK }
+
+        AlertDialog.Builder(this)
+            .setTitle(R.string.targets_title)
+            .setMultiChoiceItems(labels, checked) { _, which, isChecked -> checked[which] = isChecked }
+            .setPositiveButton(R.string.duration_continue) { _, _ ->
+                val selected = targets.filterIndexed { i, _ -> checked[i] }
+                when {
+                    selected.isEmpty() -> {
+                        Toast.makeText(this, R.string.targets_none_selected, Toast.LENGTH_SHORT).show()
+                        showTargetPickerDialog()
+                    }
+                    LockTarget.WORK_GMAIL in selected && BlockState.workGmailAccount(this) == null ->
+                        showWorkAccountDialog(onSaved = { showDurationPickerDialog(selected) })
+                    else -> showDurationPickerDialog(selected)
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun showWorkAccountDialog(onSaved: () -> Unit) {
+        if (BlockState.isBlocked(this, LockTarget.WORK_GMAIL)) {
+            Toast.makeText(this, R.string.work_account_cannot_change, Toast.LENGTH_SHORT).show()
+            return
+        }
+        val input = EditText(this).apply {
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS
+            hint = getString(R.string.work_account_hint)
+            setText(BlockState.workGmailAccount(this@MainActivity) ?: "")
+            setSingleLine()
+        }
+        val container = LinearLayout(this).apply {
+            setPadding(dp(20), dp(8), dp(20), 0)
+            addView(input, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle(R.string.work_account_title)
+            .setMessage(R.string.work_account_message)
+            .setView(container)
+            .setPositiveButton(R.string.save) { _, _ ->
+                val normalised = WorkAccount.normalise(input.text.toString())
+                when {
+                    normalised == null -> {
+                        Toast.makeText(this, R.string.work_account_invalid, Toast.LENGTH_SHORT).show()
+                        showWorkAccountDialog(onSaved)
+                    }
+                    !BlockState.setWorkGmailAccount(this, normalised) ->
+                        Toast.makeText(this, R.string.work_account_cannot_change, Toast.LENGTH_SHORT).show()
+                    else -> onSaved()
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun showDurationPickerDialog(targets: List<LockTarget>) {
         val labels = arrayOf(
             getString(R.string.duration_30_minutes),
             getString(R.string.duration_1_hour),
@@ -166,19 +272,19 @@ class MainActivity : Activity() {
                         val until = BlockState.blockUntilMillisForDurationMinutes(
                             presetDurationsMinutes[which]
                         )
-                        showStartBlockConfirmation(until)
+                        showStartBlockConfirmation(targets, until)
                     }
                     which == presetDurationsMinutes.size -> {
-                        showStartBlockConfirmation(BlockState.nextBlockUntilMillis())
+                        showStartBlockConfirmation(targets, BlockState.nextBlockUntilMillis())
                     }
-                    else -> showCustomDurationDialog()
+                    else -> showCustomDurationDialog(targets)
                 }
             }
             .setNegativeButton(android.R.string.cancel, null)
             .show()
     }
 
-    private fun showCustomDurationDialog() {
+    private fun showCustomDurationDialog(targets: List<LockTarget>) {
         val daysPicker = NumberPicker(this).apply {
             minValue = 0
             maxValue = BlockState.MAX_DURATION_DAYS
@@ -222,9 +328,10 @@ class MainActivity : Activity() {
                     customMinuteValues[minutesPicker.value]
                 if (!BlockState.isValidDurationMinutes(durationMinutes)) {
                     Toast.makeText(this, R.string.duration_invalid, Toast.LENGTH_SHORT).show()
-                    showCustomDurationDialog()
+                    showCustomDurationDialog(targets)
                 } else {
                     showStartBlockConfirmation(
+                        targets,
                         BlockState.blockUntilMillisForDurationMinutes(durationMinutes)
                     )
                 }
@@ -233,17 +340,31 @@ class MainActivity : Activity() {
             .show()
     }
 
-    private fun showStartBlockConfirmation(untilMillis: Long) {
+    private fun showStartBlockConfirmation(targets: List<LockTarget>, untilMillis: Long) {
+        val names = when (targets.size) {
+            1 -> targetName(targets[0])
+            else -> getString(R.string.targets_and, targetName(targets[0]), targetName(targets[1]))
+        }
+        var message = getString(R.string.confirm_message, names, formatUntil(untilMillis))
+        if (LockTarget.WORK_GMAIL in targets) message += getString(R.string.confirm_gmail_note)
+
         AlertDialog.Builder(this)
-            .setTitle(R.string.confirm_title)
-            .setMessage(getString(R.string.confirm_message, formatUntil(untilMillis)))
+            .setTitle(getString(R.string.confirm_title, names))
+            .setMessage(message)
             .setPositiveButton(R.string.confirm_lock) { _, _ ->
-                BlockState.startBlockUntil(this, untilMillis)
+                BlockState.startBlockUntil(this, targets, untilMillis)
                 refreshUi()
             }
             .setNegativeButton(android.R.string.cancel, null)
             .show()
     }
+
+    private fun targetName(target: LockTarget): String = getString(
+        when (target) {
+            LockTarget.SLACK -> R.string.target_slack
+            LockTarget.WORK_GMAIL -> R.string.target_work_gmail
+        }
+    )
 
     private fun formatUntil(untilMillis: Long): String =
         DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(untilMillis))

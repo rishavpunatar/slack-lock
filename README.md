@@ -1,10 +1,12 @@
 # Slack Lock
 
-An Android self-binding app that prevents opening the Slack app for a chosen timer duration.
+An Android self-binding app that prevents opening Slack, your **work** Gmail account, or both, for a chosen timer duration.
 
-The app is intentionally narrow: one button, one duration picker, one confirmation, and one Accessibility service scoped to Slack's Android package (`com.Slack`). During an active lock, opening Slack sends you back to the home screen.
+The app is intentionally narrow: one button, a choice of what to lock, one duration picker, one confirmation, and one Accessibility service. During an active lock, opening a locked app sends you back to the home screen. Slack and work Gmail have independent timers.
 
-This does not force-stop Slack, mute notifications, block Slack in a browser, or block Slack in another Android profile. Pair it with Android Focus/DND or Slack notification settings if notifications are the real trigger.
+**Work Gmail only.** Work and personal Gmail are the same Android app, so Slack Lock tells them apart by the account Gmail is showing. You set your work address (or work domain, e.g. `@example.org`) once; during a Gmail lock, that account is blocked and every other Gmail account stays usable.
+
+This does not force-stop apps, mute notifications, or block Slack/Gmail in a browser. Pair it with Android Focus/DND or app notification settings if notifications are the real trigger.
 
 Built for Android 8+.
 
@@ -46,7 +48,9 @@ Android restricts sideloaded apps from enabling sensitive settings until you exp
 
 ### 4. Use it
 
-Open **Slack Lock**, tap the button, choose a timer, and confirm the lock. Presets include 30 minutes, 1 hour, 2 hours, 4 hours, 1 day, 3 days, 7 days, 14 days, and the original "until next 6 AM" mode. You can also choose a custom days/hours/minutes timer up to 14 days.
+Open **Slack Lock**, tap the button, tick what to lock (Slack, Work Gmail, or both), choose a timer, and confirm. The first time you pick Work Gmail you'll be asked for your work address or domain; you can change it from the main screen any time a Gmail lock isn't running. Presets include 30 minutes, 1 hour, 2 hours, 4 hours, 1 day, 3 days, 7 days, 14 days, and the original "until next 6 AM" mode. You can also choose a custom days/hours/minutes timer up to 14 days.
+
+While one thing is locked you can still start a lock on the other. Starting a lock never shortens one that's already running.
 
 There is no in-app undo while a lock is active. To stop early, leave the app and either disable **Slack Lock** in Android Accessibility Settings or uninstall the app.
 
@@ -54,28 +58,40 @@ There is no in-app undo while a lock is active. To stop early, leave the app and
 
 ## Safety model
 
-Slack Lock uses Accessibility only for a deterministic rule:
+Slack Lock uses Accessibility only for two deterministic rules:
 
-> If the Slack Android app opens during an active lock, perform Android's global Home action.
+> If the Slack Android app opens during a Slack lock, perform Android's global Home action.
+>
+> If Gmail is showing your work account during a work Gmail lock, perform Android's global Home action.
 
 The service configuration is deliberately limited:
 
-- Receives only `typeWindowStateChanged` events.
-- Receives events only from `com.Slack`.
-- Cannot retrieve window content.
+- With no Gmail lock running, it receives only `typeWindowStateChanged` events from `com.Slack`, as before.
+- During a Gmail lock it also receives window-change events from other apps (to notice you left Gmail and recheck the account next time) and Gmail content-change events (to catch account switches).
+- It reads window content from Gmail only, only during a Gmail lock, and only looks at Gmail's account button (the avatar in the top-right). It never reads email content, and never reads other apps' screens.
 - Cannot perform gestures.
 - Does not request network access.
-- Does not collect, store, or transmit data.
+- Stores nothing except your lock timers, the work account setting, and whether the last Gmail check saw the work account.
 
-This app is not presented as an accessibility tool for people with disabilities. It is a personal automation/self-binding tool, so the app includes a prominent in-app disclosure and requires explicit consent before sending you to Accessibility Settings.
+This app is not presented as an accessibility tool for people with disabilities. It is a personal automation/self-binding tool, so the app includes a prominent in-app disclosure and requires explicit consent before sending you to Accessibility Settings. Upgrading from a Slack-only version shows the updated disclosure again.
+
+### Work Gmail: how it decides, and its limits
+
+- **Inbox and most list screens** show the account button, so the account is known immediately.
+- **Screens without the account button** (an open email, compose): once Slack Lock has seen the account since Gmail was opened, it remembers it. If it hasn't (e.g. you tapped a Gmail notification and Gmail opened straight into an email), it waits 1.5 seconds and then presses Back, which takes you to that account's inbox, where it can check. During a Gmail lock that means personal emails opened from a notification bounce to the personal inbox once. That is deliberate: otherwise tapping a work notification would skip the lock.
+- **"All inboxes"** mixes accounts under whichever account button is selected. Avoid it during a lock; it is not blocked when a personal account is selected.
+- **Gmail notifications, widgets, and notification actions** (reply/archive from the shade) aren't blocked. Turn work-account notifications off in Gmail settings for the strongest effect.
+- **Work profile:** if your work Gmail is in an Android work profile (briefcase icon), the same account check applies, provided your employer's device policy lets a personal-profile accessibility service see work-profile apps.
+- Detection relies on Gmail's account button keeping its current accessibility label ("Signed in as …") or view id. If a Gmail update changes both, the main screen's "Last Gmail check" line stops updating — that's the sign it needs fixing.
 
 ---
 
 ## How it works
 
-- `MainActivity` handles the single-screen UI, the Accessibility disclosure, the duration picker, the final lock confirmation, and the visible enforcement status.
-- `BlockerService` is an Android `AccessibilityService` that listens for Slack foreground events and sends the device home during an active lock.
-- `BlockState` stores `blockUntilMillis`, computes duration-based timers, and keeps the next local 6 AM shortcut.
+- `MainActivity` handles the single-screen UI, the Accessibility disclosure, the target and duration pickers, the work account setting, the final lock confirmation, and the visible enforcement status.
+- `BlockerService` is an Android `AccessibilityService` that sends the device home when Slack opens during a Slack lock, or when Gmail shows the work account during a Gmail lock. It widens its event scope only while a Gmail lock is active.
+- `BlockState` stores per-target lock expiry times and the work account, computes duration-based timers, and keeps the next local 6 AM shortcut.
+- `WorkAccount` holds the pure matching logic: normalising the work address/domain and reading the signed-in account from Gmail's account button.
 
 If Accessibility is disabled while a lock is active, the app shows that the timer is still active but enforcement is off.
 
@@ -101,4 +117,4 @@ The public repo builds a non-debuggable release variant signed with Android's de
 
 The 6 AM shortcut lives in [`BlockState.kt`](app/src/main/java/com/slacklock/BlockState.kt). Change the `WAKE_TIME` value, rebuild, and reinstall.
 
-To block additional apps, add their package names to [`accessibility_config.xml`](app/src/main/res/xml/accessibility_config.xml) and update the package check in [`BlockerService.kt`](app/src/main/java/com/slacklock/BlockerService.kt).
+To block additional apps, add a `LockTarget` in [`BlockState.kt`](app/src/main/java/com/slacklock/BlockState.kt), handle its package in [`BlockerService.kt`](app/src/main/java/com/slacklock/BlockerService.kt), and give it a label in `MainActivity.targetName`.
