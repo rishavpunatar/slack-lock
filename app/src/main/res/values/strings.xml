@@ -1,23 +1,47 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Slack Lock</string>
-    <string name="big_button_text">LOCK SLACK\nWITH TIMER</string>
+    <string name="big_button_text">START A LOCK\nWITH TIMER</string>
     <string name="enable_enforcement_text">ENABLE\nENFORCEMENT</string>
-    <string name="status_blocked_enforcing">Slack is locked until %1$s.\n\nEnforcement is on. Opening Slack returns you to the home screen.</string>
-    <string name="status_blocked_not_enforcing">Slack Lock runs until %1$s, but enforcement is off.\n\nRe-enable Accessibility to block Slack.</string>
-    <string name="help_ready">Tap when you are ready to choose a Slack lock timer.</string>
+
+    <string name="target_slack">Slack</string>
+    <string name="target_work_gmail">Work Gmail</string>
+    <string name="target_work_gmail_with_account">Work Gmail (%1$s)</string>
+    <string name="target_work_gmail_needs_setup">Work Gmail (set your work account next)</string>
+    <string name="targets_and">%1$s and %2$s</string>
+
+    <string name="status_target_locked">%1$s locked until %2$s</string>
+    <string name="status_enforcing">Enforcement is on.</string>
+    <string name="status_not_enforcing">Enforcement is off. Re-enable Accessibility to enforce.</string>
+    <string name="status_gmail_check_work">Last Gmail check: work account (sent home) at %1$s</string>
+    <string name="status_gmail_check_other">Last Gmail check: another account (allowed) at %1$s</string>
+
+    <string name="help_ready">Tap to choose what to lock (Slack, work Gmail or both) and for how long.</string>
     <string name="help_needs_permission">Setup needed: the next tap explains Accessibility access, then opens Android Settings.</string>
     <string name="help_locked">No in-app undo. To stop early, disable Slack Lock in Accessibility Settings or uninstall it.</string>
-    <string name="help_locked_not_enforcing">The timer is still active, but Slack is currently reachable because Accessibility is off.</string>
+    <string name="help_partly_locked">No in-app undo for active locks. Tap to lock the rest too.</string>
+    <string name="help_locked_not_enforcing">The timer is still active, but locked apps are reachable because Accessibility is off.</string>
+
+    <string name="work_account_unset">Set work Gmail account</string>
+    <string name="work_account_set">Work Gmail account: %1$s (change)</string>
+    <string name="work_account_locked">Work Gmail account: %1$s (locked)</string>
+    <string name="work_account_title">Work Gmail account</string>
+    <string name="work_account_message">Enter your work address to lock just that account, or your work domain (e.g. @example.org) to lock every account on it. Other Gmail accounts stay usable.</string>
+    <string name="work_account_hint">you@work.example</string>
+    <string name="work_account_invalid">Enter an email address or a domain like @example.org.</string>
+    <string name="work_account_cannot_change">Can\'t change the work account while work Gmail is locked.</string>
+    <string name="save">Save</string>
 
     <string name="enable_title">Grant Accessibility permission</string>
-    <string name="enable_message">Slack Lock needs Accessibility permission to detect when Slack opens during an active lock and send you back home. \n\nIn the next screen, find \"Slack Lock\" and toggle it on. \n\nIf the toggle is greyed out (Android 13+), go back to App info, tap the ⋮ menu in the top-right and choose \"Allow restricted settings\" first.</string>
+    <string name="enable_message">Slack Lock needs Accessibility permission to detect when Slack or your work Gmail opens during an active lock and send you back home. \n\nIn the next screen, find \"Slack Lock\" and toggle it on. \n\nIf the toggle is greyed out (Android 13+), go back to App info, tap the ⋮ menu in the top-right and choose \"Allow restricted settings\" first.</string>
     <string name="enable_open">Open settings</string>
 
     <string name="disclosure_title">Accessibility disclosure</string>
-    <string name="disclosure_message">Slack Lock uses Android Accessibility only to detect when the Slack app opens during an active lock. It receives Slack window-change events and sends you to the home screen. It does not read screen content, messages, typed text, notifications, files, or contacts, and it does not collect or share data.</string>
+    <string name="disclosure_message">Slack Lock uses Android Accessibility only to enforce locks you start.\n\nSlack: it receives Slack window-change events and sends you to the home screen.\n\nWork Gmail: Gmail uses one app for all accounts, so while a work Gmail lock is active Slack Lock reads Gmail\'s account button to see which account is open, and sends you home if it is your work account. During that lock it also notices when you switch apps, so it can recheck the account.\n\nIt does not read other apps\' screens, messages, typed text, notifications, files, or contacts, and it does not collect or share data.</string>
     <string name="disclosure_accept">I understand</string>
 
+    <string name="targets_title">What do you want to lock?</string>
+    <string name="targets_none_selected">Choose at least one thing to lock.</string>
     <string name="duration_title">Choose lock duration</string>
     <string name="duration_30_minutes">30 minutes</string>
     <string name="duration_1_hour">1 hour</string>
@@ -36,9 +60,10 @@
     <string name="duration_continue">Continue</string>
     <string name="duration_invalid">Choose a duration from 15 minutes to 14 days.</string>
 
-    <string name="confirm_title">Lock Slack?</string>
-    <string name="confirm_message">Opening Slack before %1$s will return you to the home screen. There is no in-app undo. To stop early, disable Slack Lock in Accessibility Settings or uninstall it.</string>
-    <string name="confirm_lock">Lock Slack</string>
+    <string name="confirm_title">Lock %1$s?</string>
+    <string name="confirm_message">Opening %1$s before %2$s will return you to the home screen. There is no in-app undo. To stop early, disable Slack Lock in Accessibility Settings or uninstall it.</string>
+    <string name="confirm_gmail_note">\n\nOther Gmail accounts stay usable. If Gmail opens straight into an email (e.g. from a notification), Slack Lock steps back to the inbox to check which account it is.</string>
+    <string name="confirm_lock">Lock</string>
 
-    <string name="accessibility_description">Detects when Slack is opened during an active lock and sends you back to the home screen. Does not collect, store, or transmit any data.</string>
+    <string name="accessibility_description">Detects when Slack, or your work account in Gmail, is opened during an active lock and sends you back to the home screen. Reads only Gmail\'s account button, only during a Gmail lock. Does not collect, store, or transmit any data.</string>
 </resources>
