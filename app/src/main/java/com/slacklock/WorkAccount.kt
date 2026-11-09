@@ -41,9 +41,16 @@ object WorkAccount {
      */
     fun signedInAccountFromNode(viewId: String?, description: CharSequence?): String? {
         if (description.isNullOrEmpty()) return null
-        val isAccountButton = ACCOUNT_BUTTON_IDS.any { viewId?.contains(it) == true } ||
-            description.contains("signed in as", ignoreCase = true)
+        val label = description.toString().trim().lowercase()
+        val isAccountButton = ACCOUNT_BUTTON_IDS.any {
+            viewId?.startsWith("com.google.android.gm:id/") == true &&
+                viewId.substringAfter(":id/").startsWith(it)
+        } || (viewId == null && (
+            label.startsWith("signed in as ") || label.startsWith("google account:")
+        ))
         if (!isAccountButton) return null
-        return EMAIL.find(description.toString().lowercase())?.value
+        // Account menus may name several accounts. Never pick the first address
+        // and mistake an available work account for the selected personal one.
+        return EMAIL.findAll(label).map { it.value }.distinct().toList().singleOrNull()
     }
 }

@@ -24,11 +24,11 @@ class Curtain(private val service: AccessibilityService) {
     private val hideRunnable = Runnable { hide() }
     private var view: View? = null
 
-    /** Shows the cover (or keeps it up), cancelling any pending [hideAfter]. */
+    /** Shows the cover with a fixed safety deadline; repeated events cannot extend it. */
     fun show() {
+        if (view != null) return
         handler.removeCallbacks(hideRunnable)
         handler.postDelayed(hideRunnable, MAX_SHOW_MS)
-        if (view != null) return
         val cover = TextView(service).apply {
             setBackgroundColor(service.getColor(R.color.bg))
             setTextColor(service.getColor(R.color.fg_dim))

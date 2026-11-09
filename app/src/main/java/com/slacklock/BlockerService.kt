@@ -18,9 +18,8 @@ import android.view.inputmethod.InputMethodManager
  * Work Gmail: Gmail is one app for every account, so during a Gmail lock we read
  * Gmail's account button to see which account is showing. Work account → home.
  * Another account → left alone. Some Gmail screens (an open email, compose) have
- * no account button; if we haven't seen the account since Gmail was opened, we
- * wait briefly (the inbox may still be loading) then press Back, which lands on
- * that account's inbox where the button is visible.
+ * no account button. If the account remains unreadable after a brief check,
+ * Gmail stays usable; an unknown account is never a reason to navigate away.
  *
  * Android only reports a window after it's on screen, so while the account is
  * unknown, and while the Home animation plays, a [Curtain] covers the screen to
@@ -34,7 +33,8 @@ class BlockerService : AccessibilityService() {
     private enum class GmailAccount { UNKNOWN, WORK, OTHER }
 
     private var gmailAccount = GmailAccount.UNKNOWN
-    private var unknownSince = 0L
+    private var unknownSince: Long? = null
+    private var unknownTimedOut = false
     private val handler = Handler(Looper.getMainLooper())
     private val recheckGmail = Runnable { enforceGmail() }
     private var contentCheckPending = false
@@ -78,7 +78,9 @@ class BlockerService : AccessibilityService() {
         when (pkg) {
             LockTarget.SLACK.packageName -> {
                 if (event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
+                forgetGmailAccount()
                 if (BlockState.isBlocked(this, LockTarget.SLACK)) goHome()
+                else curtain.hide()
             }
             LockTarget.WORK_GMAIL.packageName -> {
                 if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
@@ -102,37 +104,49 @@ class BlockerService : AccessibilityService() {
     }
 
     private fun enforceGmail() {
-        if (!BlockState.isBlocked(this, LockTarget.WORK_GMAIL)) return
+        if (!BlockState.isBlocked(this, LockTarget.WORK_GMAIL)) {
+            updateEventScope()
+            curtain.hide()
+            return
+        }
         val workAccount = BlockState.workGmailAccount(this) ?: return
-        // Cover first: the scan below takes a few frames. If it finds a personal
-        // account the cover comes down before it is ever drawn.
-        if (gmailAccount == GmailAccount.UNKNOWN) curtain.show()
+        // Delayed events may arrive after the user leaves Gmail or opens a keyboard.
+        // Never cover or navigate another app, or act on a cached work account then.
         val root = rootInActiveWindow
-            ?.takeIf { it.packageName?.toString() == LockTarget.WORK_GMAIL.packageName }
+        if (root?.packageName?.toString() != LockTarget.WORK_GMAIL.packageName) {
+            curtain.hide()
+            return
+        }
 
-        val signedIn = root?.let { findSignedInAccount(it) }
+        val signedIn = findSignedInAccount(root)
         if (signedIn != null) {
             val isWork = WorkAccount.matches(workAccount, signedIn)
             val detected = if (isWork) GmailAccount.WORK else GmailAccount.OTHER
             if (detected != gmailAccount) BlockState.recordGmailCheck(this, isWork)
             gmailAccount = detected
-            unknownSince = 0L
+            unknownSince = null
+            unknownTimedOut = false
             handler.removeCallbacks(recheckGmail)
         }
 
         when (gmailAccount) {
             GmailAccount.WORK -> goHome()
             GmailAccount.UNKNOWN -> {
-                // No account button yet. Keep Gmail covered, give the screen a moment
-                // to load, then step back towards the inbox to find out which account this is.
-                curtain.show()
+                // An unknown account is not evidence of a work account. Give the
+                // avatar time to load, then leave Gmail usable without pressing Back.
+                if (unknownTimedOut) {
+                    curtain.hide()
+                    return
+                }
                 val now = SystemClock.elapsedRealtime()
-                if (unknownSince == 0L) {
+                val since = unknownSince
+                if (since == null) {
                     unknownSince = now
+                    curtain.show()
                     handler.postDelayed(recheckGmail, ACCOUNT_GRACE_MS)
-                } else if (now - unknownSince >= ACCOUNT_GRACE_MS && root != null) {
-                    unknownSince = 0L
-                    performGlobalAction(GLOBAL_ACTION_BACK)
+                } else if (now - since >= ACCOUNT_GRACE_MS) {
+                    unknownTimedOut = true
+                    curtain.hide()
                 }
             }
             GmailAccount.OTHER -> curtain.hide()
@@ -148,27 +162,31 @@ class BlockerService : AccessibilityService() {
 
     private fun forgetGmailAccount() {
         gmailAccount = GmailAccount.UNKNOWN
-        unknownSince = 0L
+        unknownSince = null
+        unknownTimedOut = false
         handler.removeCallbacks(recheckGmail)
         handler.removeCallbacks(contentCheck)
         contentCheckPending = false
     }
 
-    /** Depth-first search for Gmail's account button; stops at the first match. */
+    /** Only visible, unambiguous account buttons can identify the active account. */
     private fun findSignedInAccount(root: AccessibilityNodeInfo): String? {
         val stack = ArrayDeque<AccessibilityNodeInfo>()
         stack.addLast(root)
         var visited = 0
+        val accounts = mutableSetOf<String>()
         while (stack.isNotEmpty() && visited < MAX_NODES) {
             val node = stack.removeLast()
             visited++
+            if (!node.isVisibleToUser) continue
             WorkAccount.signedInAccountFromNode(node.viewIdResourceName, node.contentDescription)
-                ?.let { return it }
+                ?.let { accounts.add(it) }
             for (i in node.childCount - 1 downTo 0) {
                 node.getChild(i)?.let { stack.addLast(it) }
             }
         }
-        return null
+        // A truncated tree or account picker cannot safely identify a work account.
+        return if (stack.isEmpty()) accounts.singleOrNull() else null
     }
 
     /**
@@ -193,7 +211,10 @@ class BlockerService : AccessibilityService() {
         widened = wide
     }
 
-    override fun onInterrupt() { /* no-op */ }
+    override fun onInterrupt() {
+        forgetGmailAccount()
+        if (::curtain.isInitialized) curtain.hide()
+    }
 
     private companion object {
         const val ACCOUNT_GRACE_MS = 1500L

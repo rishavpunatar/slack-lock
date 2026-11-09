@@ -72,4 +72,30 @@ class WorkAccountTest {
             )
         )
     }
+    @Test
+    fun readsModernGoogleAccountLabelWithoutKnownId() {
+        assertEquals("jane@gmail.com", WorkAccount.signedInAccountFromNode(
+            null, "Google Account: Jane Doe (jane@gmail.com)"))
+    }
+
+    @Test
+    fun ignoresConversationThatQuotesASignedInLabel() {
+        assertNull(WorkAccount.signedInAccountFromNode(
+            "com.google.android.gm:id/viewified_conversation_item_view",
+            "Mum: Signed in as Jane jane@work.example.org"))
+    }
+
+    @Test
+    fun ignoresAmbiguousAccountLabels() {
+        assertNull(WorkAccount.signedInAccountFromNode(
+            "com.google.android.gm:id/selected_account_disc_gmail",
+            "Signed in as jane@gmail.com; also available jane@work.example.org"))
+    }
+
+    @Test
+    fun ignoresUnrelatedViewIdsContainingAccountButtonName() {
+        assertNull(WorkAccount.signedInAccountFromNode(
+            "com.google.android.gm:id/message_selected_account_disc_quote",
+            "jane@work.example.org"))
+    }
 }
