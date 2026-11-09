@@ -62,7 +62,7 @@
 
     <string name="confirm_title">Lock %1$s?</string>
     <string name="confirm_message">Opening %1$s before %2$s will return you to the home screen. There is no in-app undo. To stop early, disable Slack Lock in Accessibility Settings or uninstall it.</string>
-    <string name="confirm_gmail_note">\n\nOther Gmail accounts stay usable. If Gmail opens straight into an email (e.g. from a notification), Slack Lock steps back to the inbox to check which account it is.</string>
+    <string name="confirm_gmail_note">\n\nOther Gmail accounts stay usable. Gmail is blocked only when its account can be identified as your work account. If an email opens without an account button (e.g. from a notification), it may remain accessible until you return to the inbox.</string>
     <string name="confirm_lock">Lock</string>
 
     <string name="accessibility_description">Detects when Slack, or your work account in Gmail, is opened during an active lock and sends you back to the home screen. Reads only Gmail\'s account button, only during a Gmail lock. Does not collect, store, or transmit any data.</string>
